@@ -32,6 +32,7 @@
 
 -(void)drawRect:(CGRect)rect
 {
+//    http://www.jianshu.com/p/6db3289fb05d
     [super drawRect:rect];
     //以下四句：coreText使用的是系统坐标，然而我们平时所接触的iOS的都是屏幕坐标，所以要将屏幕坐标系转换系统坐标系，这样才能与我们想想的坐标互相对应。事实上呢，这三句是翻转画布的固定写法，这三句你以后会经常看到的。
     CGContextRef context = UIGraphicsGetCurrentContext();
@@ -64,23 +65,22 @@
     NSDictionary * activeAttr = @{NSForegroundColorAttributeName:[UIColor redColor],@"click":NSStringFromSelector(@selector(click))};//生成一个富文本属性字典
     [attributeStr addAttributes:activeAttr range:NSMakeRange(100, 30)];
     [attributeStr addAttributes:activeAttr range:NSMakeRange(400, 100)];
-    
+
 //    绘制文本
     CTFramesetterRef frameSetter = CTFramesetterCreateWithAttributedString((CFAttributedStringRef)attributeStr);//一个frame的工厂，负责生成frame
     UIBezierPath * path = [UIBezierPath bezierPathWithRect:self.bounds];
     UIBezierPath * cirP = [UIBezierPath bezierPathWithOvalInRect:CGRectMake(100, 100, 100, 200)];
-    [path appendPath:cirP];//添加绘制尺寸.事实证明这里可以多次添加
+    [path appendPath:cirP];//路径裁剪.事实证明这里可以多次添加
     
     _length = attributeStr.length;
-    _frame = CTFramesetterCreateFrame(frameSetter, CFRangeMake(0, _length), path.CGPath, NULL);//工厂根据绘制区域及富文本（可选范围，多次设置）设置frame
+    _frame = CTFramesetterCreateFrame(frameSetter, CFRangeMake(0, _length), path.CGPath, NULL);//可以通过framesetter以及你想要绘制的富文本的范围获取该CTRun的frame。
     CTFrameDraw(_frame, context);//根据frame绘制文字
     
 //    绘制图片
-    /*
-     我们可以看到，我们是以path和frameSetter去生成我们绘制文本的frame的。
-     所以说，只要在这个地方我们传入的path中将特殊区域排除我们获得的frame就不包含该区域，从而绘制的文本也不会在该区域中绘制。
-     ------环绕的
-     */
+    
+//     我们可以看到，我们是以path和frameSetter去生成我们绘制文本的frame的。
+//     所以说，只要在这个地方我们传入的path中将 特殊区域排除 我们获得的frame就 不 包含 该区域，从而绘制的 文本也不会 在该区域中绘制。
+//     ------环绕的
     CGContextDrawImage(context, cirP.bounds, [[UIImage imageNamed:@"1.jpg"] dw_ClipImageWithPath:cirP mode:(DWContentModeScaleAspectFill)].CGImage);
     
     //------非环绕的  根据frame返回图片绘制的区域
@@ -90,6 +90,40 @@
     
     CFRelease(_frame);
     CFRelease(frameSetter);
+
+    
+    //单独绘制 非环绕
+    /*
+    CTFramesetterRef frameSetter = CTFramesetterCreateWithAttributedString((CFAttributedStringRef)attributeStr);//一个frame的工厂，负责生成frame
+    UIBezierPath * path = [UIBezierPath bezierPathWithRect:self.bounds];
+    _length = attributeStr.length;
+    _frame = CTFramesetterCreateFrame(frameSetter, CFRangeMake(0, _length), path.CGPath, NULL);//可以通过framesetter以及你想要绘制的富文本的范围获取该CTRun的frame。
+    CTFrameDraw(_frame, context);//根据frame绘制文字
+     
+    UIImage * image = [UIImage imageNamed:@"1.jpg"];
+    [self handleActiveRectWithFrame:_frame];//根据frame返回图片绘制的区域
+    CGContextDrawImage(context,_imgFrm, image.CGImage);//
+    
+    CFRelease(_frame);
+    CFRelease(frameSetter);
+    */
+    
+    //单独绘制 环绕
+    /*
+    CTFramesetterRef frameSetter = CTFramesetterCreateWithAttributedString((CFAttributedStringRef)attributeStr);//一个frame的工厂，负责生成frame
+    UIBezierPath * path = [UIBezierPath bezierPathWithRect:self.bounds];
+    UIBezierPath * cirP = [UIBezierPath bezierPathWithOvalInRect:CGRectMake(100, 100, 100, 200)];
+    [path appendPath:cirP];//路径裁剪.事实证明这里可以多次添加
+    
+    _length = attributeStr.length;
+    _frame = CTFramesetterCreateFrame(frameSetter, CFRangeMake(0, _length), path.CGPath, NULL);//可以通过framesetter以及你想要绘制的富文本的范围获取该CTRun的frame。
+    CTFrameDraw(_frame, context);//根据frame绘制文字
+    
+    CGContextDrawImage(context, cirP.bounds, [[UIImage imageNamed:@"1.jpg"] dw_ClipImageWithPath:cirP mode:(DWContentModeScaleAspectFill)].CGImage);
+    
+    CFRelease(_frame);
+    CFRelease(frameSetter);
+     */
 }
 
 #pragma mark ---CTRUN代理---
@@ -108,13 +142,15 @@ static CGFloat widthCallBacks(void * ref)
 }
 
 #pragma mark ---根据frame返回图片绘制的区域---
-
 -(void)handleActiveRectWithFrame:(CTFrameRef)frame
 {
+//http://www.jianshu.com/p/6db3289fb05d
+//    http://www.jianshu.com/p/e154047b0f98
     NSArray * arrLines = (NSArray *)CTFrameGetLines(frame);//根据frame获取需要绘制的线的数组
     NSInteger count = [arrLines count];//获取线的数量
     CGPoint points[count];//建立起点的数组（cgpoint类型为结构体，故用C语言的数组）
     CTFrameGetLineOrigins(frame, CFRangeMake(0, 0), points);//获取起点
+    
     for (int i = 0; i < count; i ++) {//遍历线的数组
         CTLineRef line = (__bridge CTLineRef)arrLines[i];
         NSArray * arrGlyphRun = (NSArray *)CTLineGetGlyphRuns(line);//获取GlyphRun数组（GlyphRun：高效的字符绘制方案）
